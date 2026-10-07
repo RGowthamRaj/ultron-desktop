@@ -1,0 +1,15 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+.env.*
+!.env.example
+*.log
+settings.json
+settings.tmp
+*.pem
+*.key
+models/
+*.wav
+*.zip
+output/
