@@ -26,3 +26,32 @@ TOOLS = [
 ]
 
 
+def execute(name, arguments):
+    if name == 'open_app':
+        app = arguments.get('app')
+        if app not in APP_NAMES:
+            raise ValueError('Unsupported application.')
+        if app == 'browser':
+            if not webbrowser.open('https://www.google.com'):
+                raise RuntimeError('Windows could not open the browser.')
+        elif app == 'spotify':
+            os.startfile('spotify:')
+        else:
+            system = Path(os.environ.get('WINDIR', r'C:\Windows')) / 'System32'
+            local = Path(os.environ.get('LOCALAPPDATA', str(Path.home() / 'AppData/Local')))
+            program = Path(os.environ.get('PROGRAMFILES', r'C:\Program Files'))
+            program_x86 = Path(os.environ.get('PROGRAMFILES(X86)', r'C:\Program Files (x86)'))
+            candidates = {
+                'notepad': [system / 'notepad.exe'],
+                'calculator': [system / 'calc.exe'],
+                'explorer': [system.parent / 'explorer.exe'],
+                'vscode': [local / 'Programs/Microsoft VS Code/Code.exe', program / 'Microsoft VS Code/Code.exe'],
+                'chrome': [program / 'Google/Chrome/Application/chrome.exe', local / 'Google/Chrome/Application/chrome.exe'],
+                'edge': [program_x86 / 'Microsoft/Edge/Application/msedge.exe', program / 'Microsoft/Edge/Application/msedge.exe'],
+            }[app]
+            executable = next((str(p) for p in candidates if p.is_file()), None)
+            if not executable:
+                raise FileNotFoundError(f'{app} is not installed in a supported location.')
+            subprocess.Popen([executable])
+        return f'Requested opening {app}.'
+    raise ValueError('Unknown desktop action.')
