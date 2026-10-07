@@ -62,4 +62,13 @@ def execute(name, arguments):
                 raise FileNotFoundError(f'{app} is not installed in a supported location.')
             subprocess.Popen([executable])
         return f'Requested opening {app}.'
+    if name == 'media_control':
+        keys = {'volume_up': 0xAF, 'volume_down': 0xAE, 'mute_toggle': 0xAD,
+                'play_pause': 0xB3, 'next_track': 0xB0}
+        action = arguments.get('action')
+        if action not in keys:
+            raise ValueError('Unsupported media action.')
+        ctypes.windll.user32.keybd_event(keys[action], 0, 0, 0)
+        ctypes.windll.user32.keybd_event(keys[action], 0, 2, 0)
+        return f'Sent {action} media key; response depends on the active player.'
     raise ValueError('Unknown desktop action.')
