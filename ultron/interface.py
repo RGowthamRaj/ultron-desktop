@@ -288,4 +288,94 @@ class Interface:
         self.log.see('end')
         self.log.configure(state='disabled')
 
+    def render_orb(self, width, height):
+        scale = 2
+        radius = min(150, height*0.39, width*0.25)
+        cx, cy = width/2, height/2
+        key = (width, height, round(radius))
+        if getattr(self, '_orb_key', None) != key:
+            base = Image.new('RGB', (width*scale, height*scale), BG)
+            glow = Image.new('RGB', base.size, '#000000')
+            gd = ImageDraw.Draw(glow)
+            gd.ellipse(((cx-radius*1.08)*scale, (cy-radius*1.08)*scale,
+                        (cx+radius*1.08)*scale, (cy+radius*1.08)*scale), fill='#0b3d63')
+            glow = glow.filter(ImageFilter.GaussianBlur(radius*0.35*scale))
+            from PIL import ImageChops
+            base = ImageChops.add(base, glow)
+            draw = ImageDraw.Draw(base)
+            # A cached spherical light field gives the live geometry a smooth volume.
+            pixels = base.load()
+            rpx = radius*scale
+            for py in range(int((cy-radius)*scale), int((cy+radius)*scale)):
+                ny = (py-cy*scale)/rpx
+                for px in range(int((cx-radius)*scale), int((cx+radius)*scale)):
+                    nx = (px-cx*scale)/rpx
+                    distance = nx*nx+ny*ny
+                    if distance < 1:
+                        z = math.sqrt(1-distance)
+                        light = max(0, -0.38*nx-0.52*ny+0.72*z)
+                        highlight = light**12
+                        rim = (1-z)**3
+                        pixels[px,py] = (int(5+7*z+18*highlight+9*rim),
+                                         int(19+17*z+72*highlight+49*rim),
+                                         int(35+23*z+103*highlight+71*rim))
+            self._orb_base = base
+            self._orb_key = key
+        image = self._orb_base.copy()
+        draw = ImageDraw.Draw(image)
+        rotation = math.radians(self.phase)
+        tilt = 0.32
+        def project(x, y, z):
+            x, z = x*math.cos(rotation)+z*math.sin(rotation), -x*math.sin(rotation)+z*math.cos(rotation)
+            y, z = y*math.cos(tilt)-z*math.sin(tilt), y*math.sin(tilt)+z*math.cos(tilt)
+            perspective = 1+z*0.13
+            return ((cx+x*radius*perspective)*scale, (cy+y*radius*perspective)*scale, z)
+        segments = []
+        for latitude in range(-75, 76, 15):
+            b = math.radians(latitude)
+            points = [project(math.cos(b)*math.cos(a*math.tau/72), math.sin(b), math.cos(b)*math.sin(a*math.tau/72)) for a in range(73)]
+            segments.extend((points[i], points[i+1]) for i in range(72))
+        for meridian in range(0, 360, 20):
+            a = math.radians(meridian)
+            points = [project(math.cos(b*math.pi/48)*math.cos(a), math.sin(b*math.pi/48), math.cos(b*math.pi/48)*math.sin(a)) for b in range(-24, 25)]
+            segments.extend((points[i], points[i+1]) for i in range(48))
+        segments.sort(key=lambda pair: pair[0][2]+pair[1][2])
+        for p, q in segments:
+            depth = (p[2]+q[2])/2
+            light = max(0, depth)
+            color = (int(23+light*96), int(48+light*155), int(73+light*180)) if depth > 0 else (13, 35, 54)
+            draw.line((p[0], p[1], q[0], q[1]), fill=color, width=scale)
+        for index in range(36):
+            a = index*math.tau/36+rotation*0.5
+            b = math.sin(index*2.4)*1.12
+            p = project(math.cos(b)*math.cos(a), math.sin(b), math.cos(b)*math.sin(a))
+            if p[2] > 0.15:
+                r = 1.2*scale
+                draw.ellipse((p[0]-r,p[1]-r,p[0]+r,p[1]+r), fill='#bcefff')
+        for index in range(420):
+            y = 1-2*(index+0.5)/420
+            belt = math.sqrt(1-y*y)
+            a = index*2.39996323
+            p = project(belt*math.cos(a), y, belt*math.sin(a))
+            if p[2] > 0.05:
+                r = (0.3+0.35*p[2])*scale
+                color = (int(35+75*p[2]), int(94+112*p[2]), int(130+120*p[2]))
+                draw.ellipse((p[0]-r,p[1]-r,p[0]+r,p[1]+r), fill=color)
+        orbit_layer = Image.new('RGBA', image.size)
+        od = ImageDraw.Draw(orbit_layer)
+        for orbit, angle in [(1.40, 0.22), (1.52, -0.4)]:
+            points = []
+            for i in range(145):
+                a = i*math.tau/144
+                x, y = math.cos(a)*radius*orbit, math.sin(a)*radius*0.37
+                points.append(((cx+x*math.cos(angle)-y*math.sin(angle))*scale,
+                               (cy+x*math.sin(angle)+y*math.cos(angle))*scale))
+            od.line(points, fill=(70, 146, 205, 105), width=scale)
+            position = points[int(self.phase*(0.7 if angle>0 else -0.6)) % 144]
+            r = 2*scale
+            od.ellipse((position[0]-r,position[1]-r,position[0]+r,position[1]+r), fill=(168,234,255,255))
+        aura = orbit_layer.filter(ImageFilter.GaussianBlur(3*scale))
+        image = Image.alpha_composite(image.convert('RGBA'), aura)
+        image = Image.alpha_composite(image, orbit_layer)
+        return image.resize((width,height), Image.Resampling.LANCZOS)
 
