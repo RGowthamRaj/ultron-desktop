@@ -81,6 +81,12 @@ class Cloud:
             result['chat_template_kwargs'] = {'enable_thinking': False}
         return result
 
+    def check(self):
+        response = self.request({'model': self.model, 'messages': [{'role': 'user', 'content': 'Reply with OK.'}],
+                                 'stream': False, 'max_tokens': 128})
+        if not response.get('choices'):
+            raise RuntimeError('Provider returned no chat choices. Check model compatibility.')
+        return 'Connection verified. Model is reachable.'
 
     def reply(self, text, stopped, report):
         messages = [{'role': 'system', 'content': INSTRUCTIONS}]
