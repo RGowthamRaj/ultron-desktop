@@ -379,3 +379,35 @@ class Interface:
         image = Image.alpha_composite(image, orbit_layer)
         return image.resize((width,height), Image.Resampling.LANCZOS)
 
+    def animate(self):
+        if self.closing:
+            return
+        started = time.monotonic()
+        self.phase += 1.2 if self.state in ('THINKING', 'SPEAKING') else 0.6
+        self.clock.set(datetime.now().strftime('%H:%M  ·  %d %b'))
+        seconds = int(time.monotonic()-self.started)
+        self.uptime.set(f'Session {seconds//60:02d}:{seconds%60:02d}  ·  {self.commands} commands')
+        self.state_label.configure(text={'LISTENING': '●  Listening', 'MUTED': 'Microphone paused',
+            'CAPTURING': '●  Voice detected', 'THINKING': 'Processing your request',
+            'SPEAKING': 'Ultron is speaking', 'PROCESSING': 'Preparing', 'STANDBY': 'Ready'}.get(self.state, self.state))
+        self.hero_title.configure(text={'CAPTURING': 'I’m listening.', 'THINKING': 'Connecting the dots.',
+            'SPEAKING': 'Consider it handled.', 'MUTED': 'A moment of quiet.'}.get(self.state, 'Ready when you are.'))
+        width = max(self.hud.winfo_width(), 260)
+        height = max(self.hud.winfo_height(), 220)
+        image = self.render_orb(width, height)
+        if getattr(self, '_orb_photo', None) and getattr(self, '_photo_size', None) == image.size:
+            self._orb_photo.paste(image)
+        else:
+            self._orb_photo = ImageTk.PhotoImage(image)
+            self._photo_size = image.size
+            self.hud.delete('all')
+            self.hud.create_image(0, 0, anchor='nw', image=self._orb_photo)
+        self.hud.delete('meter')
+        self.levels = self.levels[1:]+[self.level if self.state in ('LISTENING','CAPTURING') else 0.0]
+        for i, level in enumerate(self.levels):
+            bar = max(2, level*18)
+            x = width/2-62+i*4
+            self.hud.create_line(x, height-13-bar/2, x, height-13+bar/2,
+                                  width=2, fill=CYAN if level>0.07 else '#263e55', tags='meter')
+        elapsed = int((time.monotonic()-started)*1000)
+        self.root.after(max(15, 80-elapsed), self.animate)
