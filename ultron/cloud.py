@@ -38,3 +38,38 @@ class NoRedirect(HTTPRedirectHandler):
         raise RuntimeError('The API redirected the request. Check the configured base URL.')
 
 
+class Cloud:
+    def __init__(self, key, model='gpt-4.1-mini', base_url='https://api.openai.com/v1', tools_enabled=True):
+        self.key = key.strip()
+        self.model = model.strip()
+        self.base_url = validate_endpoint(base_url)
+        if not self.model:
+            raise ValueError('Enter the model ID provided by your API provider.')
+        self.tools_enabled = tools_enabled
+        self.history = []
+
+    def request(self, payload):
+        headers = {'Content-Type': 'application/json', 'Accept': 'application/json'}
+        if self.key:
+            headers['Authorization'] = 'Bearer ' + self.key
+        request = Request(self.base_url + '/chat/completions', data=json.dumps(payload).encode(), headers=headers)
+        try:
+            with build_opener(NoRedirect()).open(request, timeout=60) as response:
+                if response.status != 200:
+                    raise RuntimeError(f'Provider returned HTTP {response.status}; request was not completed.')
+                return json.loads(response.read())
+        except HTTPError as exc:
+            messages = {401: 'API key rejected. Select the matching provider and check the key.',
+                        429: 'Provider usage limit reached. Check your allowance or try later.',
+                        403: 'This key does not have access to the selected model.',
+                        404: 'Model or endpoint not found. Check the base URL and model ID.',
+                        400: 'Provider rejected the request. Check the model, or disable desktop tools if unsupported.',
+                        422: 'Provider rejected the request format or model. Try disabling desktop tools.'}
+            raise RuntimeError(messages.get(exc.code, f'Provider request failed (HTTP {exc.code}).')) from None
+        except (URLError, TimeoutError):
+            raise RuntimeError('Cannot reach the AI provider. Listening will continue; try again later.') from None
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            raise RuntimeError('The endpoint did not return compatible JSON. Check its base URL.') from None
+
+
+
