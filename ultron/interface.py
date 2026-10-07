@@ -86,9 +86,68 @@ class Interface:
 
 
 
+    def open_settings(self):
+        window = self.settings_window
+        window.deiconify()
+        window.lift()
+        window.focus_set()
 
+    def open_privacy(self):
+        self.open_settings()
 
+    def build_settings(self):
+        self.settings_window = tk.Toplevel(self.root)
+        window = self.settings_window
+        window.title('Ultron · Connection & preferences')
+        window.geometry('790x660')
+        window.minsize(790, 660)
+        window.configure(bg=BG)
+        window.transient(self.root)
+        window.protocol('WM_DELETE_WINDOW', window.withdraw)
+        frame = tk.Frame(window, bg=BG, padx=32, pady=28)
+        frame.pack(fill='both', expand=True)
+        self.label(frame, 'Your intelligence. Your choice.', size=23, color=TEXT, weight='bold').pack(anchor='w')
+        self.label(frame, 'Connect your provider once. Ultron takes it from there.', size=11).pack(anchor='w', pady=(7, 24))
+        body = tk.Frame(frame, bg=BG)
+        body.pack(fill='both', expand=True)
+        form = tk.Frame(body, bg=BG, width=410)
+        form.pack(side='left', fill='both', expand=True, padx=(0, 26))
+        options = tk.Frame(body, bg=PANEL, width=245, padx=18, pady=20)
+        options.pack(side='right', fill='y')
+        options.pack_propagate(False)
+        self.label(form, 'AI provider', size=10, color=TEXT).pack(anchor='w', pady=(0, 8))
+        select = ttk.Combobox(form, textvariable=self.provider, values=list(PRESETS), state='readonly')
+        select.pack(fill='x')
+        select.bind('<<ComboboxSelected>>', self.change_provider)
+        for title, variable, mask in [('API key', self.key, '•'), ('Base URL', self.endpoint, ''), ('Model ID', self.model, '')]:
+            self.label(form, title, size=10, color=TEXT).pack(anchor='w', pady=(19, 8))
+            entry = tk.Entry(form, textvariable=variable, show=mask, bg='#111e2e', fg=TEXT,
+                             insertbackground=CYAN, font=('Segoe UI', 11), relief='flat', bd=0)
+            entry.pack(fill='x', ipady=11)
+        self.label(form, variable=self.connection, size=9, color=BLUE).pack(anchor='w', pady=(17, 0))
+        self.label(options, 'YOUR PREFERENCES', size=8, color=BLUE, weight='bold').pack(anchor='w', pady=(0, 16))
+        for text, variable in [('Remember encrypted key', self.remember), ('Speak replies', self.voice),
+                               ('Desktop actions', self.tools), ('Listen automatically', self.auto)]:
+            tk.Checkbutton(options, text=text, variable=variable, bg=PANEL, fg=TEXT, selectcolor='#15283b',
+                           activebackground=PANEL, activeforeground=CYAN, font=('Segoe UI', 10),
+                           bd=0, anchor='w', command=lambda: setattr(self, 'speech_enabled', self.voice.get())
+                           ).pack(fill='x', pady=8)
+        tk.Frame(options, bg=LINE, height=1).pack(fill='x', pady=22)
+        self.label(options, 'Private by design', size=12, color=TEXT, weight='bold').pack(anchor='w')
+        self.label(options, 'Audio is processed on your PC.\nOnly recognized text goes to\nyour chosen AI provider.\n\nRemembered keys are encrypted\nfor your Windows account.',
+                   size=9, justify='left', wraplength=210).pack(anchor='w', pady=(10, 0))
+        self.label(frame, 'Supports OpenAI-compatible chat APIs. Your key must match the provider.', size=9).pack(anchor='w', pady=(18, 16))
+        actions = tk.Frame(frame, bg=BG)
+        actions.pack(fill='x')
+        self.test_button = self.button(actions, 'Test connection', self.test_connection, width=155)
+        self.test_button.pack(side='left')
+        self.button(actions, 'Save connection', self.save_and_close, True, width=165).pack(side='right')
+        self.button(actions, 'Cancel', window.withdraw, width=90).pack(side='right', padx=10)
+        window.withdraw()
 
+    def save_and_close(self):
+        if self.apply():
+            self.settings_window.withdraw()
 
 
 
