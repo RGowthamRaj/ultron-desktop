@@ -63,6 +63,79 @@ def call(name='open_app', args='{"app":"calculator"}'):
                             'function': {'name': name, 'arguments': args}}]}}]}
 
 
+class CloudTests(unittest.TestCase):
+    @patch('ultron.cloud.execute', return_value='Opened calculator.')
+    def test_tool_result_is_returned_before_reply(self, action):
+        cloud = Cloud('test-key')
+        cloud.request = Mock(side_effect=[call(), message('Calculator opened.')])
+        self.assertEqual(cloud.reply('Open calculator', lambda: False, lambda *args: None), 'Calculator opened.')
+        action.assert_called_once_with('open_app', {'app': 'calculator'})
+        second = cloud.request.call_args_list[1].args[0]['messages']
+        self.assertTrue(any(item.get('role') == 'tool' for item in second))
+        self.assertEqual(cloud.request.call_args.args[0]['tool_choice'], 'auto')
+
+
+    @patch('ultron.cloud.execute', side_effect=ValueError('Unsupported action'))
+    def test_action_failure_is_reported_to_model(self, action):
+        cloud = Cloud('test-key')
+        cloud.request = Mock(side_effect=[call('shell', '{}'), message('I cannot run that command.')])
+        cloud.reply('Run a command', lambda: False, lambda *args: None)
+        payload = cloud.request.call_args.args[0]['messages']
+        self.assertIn('Action failed', next(item['content'] for item in payload if item.get('role') == 'tool'))
+
+    def test_nvidia_uses_chat_schema_and_preserves_model(self):
+        endpoint, model = PRESETS['NVIDIA Nemotron']
+        cloud = Cloud('nvidia-key', model, endpoint)
+        cloud.request = Mock(return_value=message('Ready.'))
+        self.assertEqual(cloud.reply('Hello', lambda: False, lambda *args: None), 'Ready.')
+        payload = cloud.request.call_args.args[0]
+        self.assertEqual(payload['model'], model)
+        self.assertFalse(payload['stream'])
+        self.assertFalse(payload['chat_template_kwargs']['enable_thinking'])
+        self.assertIn('parameters', payload['tools'][0]['function'])
+
+    def test_tools_can_be_disabled_for_chat_only_models(self):
+        cloud = Cloud('key', 'custom-model', 'https://example.com/v1', tools_enabled=False)
+        self.assertNotIn('tools', cloud.payload([]))
+
+    def test_internal_reasoning_is_not_spoken(self):
+        cloud = Cloud('key')
+        cloud.request = Mock(return_value=message('<think>private</think> Hello.'))
+        self.assertEqual(cloud.reply('Hi', lambda: False, lambda *args: None), 'Hello.')
+
+    def test_endpoints_validate_transport_and_normalize(self):
+        self.assertEqual(validate_endpoint('https://example.com/v1/chat/completions/'), 'https://example.com/v1')
+        self.assertEqual(validate_endpoint('http://localhost:11434/v1'), 'http://localhost:11434/v1')
+        for bad in ['file:///secrets', 'http://example.com/v1', 'https://key@example.com/v1',
+                    'https://example.com/v1?key=secret', 'https://example.com/v1#fragment']:
+            with self.assertRaises(ValueError):
+                validate_endpoint(bad)
+
+
+
+
+    @patch('ultron.cloud.execute')
+    def test_unexpected_tools_never_execute_when_disabled(self, action):
+        cloud = Cloud('key', tools_enabled=False)
+        cloud.request = Mock(side_effect=[call(), message('Desktop tools are disabled.')])
+        cloud.reply('Open calculator', lambda: False, lambda *args: None)
+        action.assert_not_called()
+
+    def test_request_routes_key_to_configured_provider(self):
+        cloud = Cloud('fake-nvidia-key', 'custom-model', 'https://integrate.api.nvidia.com/v1')
+        response = Mock()
+        response.status = 200
+        response.read.return_value = json.dumps(message('Hello.')).encode()
+        context = Mock()
+        context.__enter__ = Mock(return_value=response)
+        context.__exit__ = Mock(return_value=None)
+        opener = Mock()
+        opener.open.return_value = context
+        with patch('ultron.cloud.build_opener', return_value=opener):
+            cloud.request(cloud.payload([]))
+        request = opener.open.call_args.args[0]
+        self.assertEqual(request.full_url, 'https://integrate.api.nvidia.com/v1/chat/completions')
+        self.assertEqual(request.get_header('Authorization'), 'Bearer fake-nvidia-key')
 
 
 if __name__ == '__main__':
