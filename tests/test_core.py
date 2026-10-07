@@ -74,6 +74,16 @@ class CloudTests(unittest.TestCase):
         self.assertTrue(any(item.get('role') == 'tool' for item in second))
         self.assertEqual(cloud.request.call_args.args[0]['tool_choice'], 'auto')
 
+    @patch('ultron.cloud.execute')
+    def test_stop_after_network_response_prevents_actions(self, action):
+        cloud = Cloud('test-key')
+        stopped = threading.Event()
+        def respond(*args):
+            stopped.set()
+            return call()
+        cloud.request = respond
+        self.assertEqual(cloud.reply('Open calculator', stopped.is_set, lambda *args: None), '')
+        action.assert_not_called()
 
     @patch('ultron.cloud.execute', side_effect=ValueError('Unsupported action'))
     def test_action_failure_is_reported_to_model(self, action):
@@ -111,8 +121,39 @@ class CloudTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 validate_endpoint(bad)
 
+    def test_complete_turns_are_retained(self):
+        cloud = Cloud('key')
+        cloud.request = Mock(return_value=message('Hello.'))
+        for i in range(8):
+            cloud.reply(str(i), lambda: False, lambda *args: None)
+        self.assertEqual(len(cloud.history), 6)
+        self.assertEqual(cloud.history[0][0]['content'], '2')
 
+    def test_listener_recovers_after_provider_failure(self):
+        events = []
+        listener = Listener(lambda: False, lambda *value: events.append(value))
+        handler = Mock(side_effect=[RuntimeError('provider down'), None])
+        listener.handle(handler, 'one', 'text')
+        listener.handle(handler, 'two', 'text')
+        self.assertEqual(handler.call_count, 2)
+        self.assertEqual(events[0], ('error', 'provider down'))
 
+    def test_continuous_loop_processes_next_command_after_failure(self):
+        stopped = threading.Event()
+        listener = Listener(stopped.is_set, lambda *args: None)
+        listener.model = object()
+        commands = queue.Queue()
+        commands.put('first')
+        commands.put('second')
+        seen = []
+        def handler(command, kind):
+            seen.append(command)
+            if command == 'first':
+                raise RuntimeError('temporary API failure')
+            stopped.set()
+        with patch.dict(sys.modules, {'sounddevice': SimpleNamespace(), 'vosk': SimpleNamespace()}):
+            listener.listen(handler, commands)
+        self.assertEqual(seen, ['first', 'second'])
 
     @patch('ultron.cloud.execute')
     def test_unexpected_tools_never_execute_when_disabled(self, action):
