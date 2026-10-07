@@ -31,5 +31,32 @@ def protect(data, decrypt=False):
         kernel.LocalFree(ctypes.cast(output.data, ctypes.c_void_p))
 
 
+def load(path=SETTINGS_PATH):
+    provider = 'OpenAI' if os.environ.get('OPENAI_API_KEY') else 'NVIDIA Nemotron'
+    base, model = PRESETS[provider]
+    config = {'provider': provider, 'base_url': base, 'model': os.environ.get('ULTRON_MODEL', model),
+              'key': os.environ.get('OPENAI_API_KEY', '') if provider == 'OpenAI' else os.environ.get('NVIDIA_API_KEY', ''),
+              'remember': True, 'speech': True, 'tools': True, 'autolisten': True}
+    try:
+        saved = json.loads(path.read_text(encoding='utf-8'))
+        for key in ('provider', 'base_url', 'model', 'remember', 'speech', 'tools', 'autolisten'):
+            if key in saved:
+                config[key] = saved[key]
+        if saved.get('encrypted_key'):
+            config['key'] = protect(base64.b64decode(saved['encrypted_key']), decrypt=True).decode()
+    except FileNotFoundError:
+        pass
+    except Exception:
+        config['notice'] = 'Saved settings could not be loaded. Please enter your connection again.'
+        config['key'] = ''
+    return config
 
 
+def save(config, path=SETTINGS_PATH):
+    saved = {key: config[key] for key in ('provider', 'base_url', 'model', 'remember', 'speech', 'tools', 'autolisten')}
+    if config['remember'] and config['key']:
+        saved['encrypted_key'] = base64.b64encode(protect(config['key'].encode())).decode()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix('.tmp')
+    temporary.write_text(json.dumps(saved, indent=2), encoding='utf-8')
+    temporary.replace(path)
