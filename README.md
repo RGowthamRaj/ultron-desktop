@@ -76,6 +76,28 @@ The default wake phrase is **Hey computer** because those words are in the speec
 A dependable “Ultron” or “Jarvis” trigger requires a suitable custom wake model or pronunciation
 support. This is phrase recognition, not speaker authentication; nearby voices may activate it.
 
+## Architecture
+
+```mermaid
+flowchart LR
+  A[Microphone] --> B[Local wake detection]
+  B --> C[Local command transcription]
+  C --> D[Configured chat API]
+  D --> E[Validated desktop tools]
+  E --> D
+  D --> F[Local Windows voice]
+  F --> B
+```
+
+Command capture ends after approximately 1.3 seconds of silence or 12 seconds total. If no speech
+starts within five seconds, the app returns to wake listening. Stop prevents new tool execution
+after a pending API response returns; actions already dispatched to Windows cannot be undone.
+Speech playback is interruptible by mute. A pending HTTP request can take up to 60 seconds to finish.
+
+The assistant opens apps and controls media. It does not yet inspect screens, click inside apps,
+type documents, send messages, modify files, or execute arbitrary commands. Tool arguments are
+validated locally. It offers only the explicitly implemented actions to the model.
+
 ## Fresh installation
 
 Requires Windows x64, Python with Tkinter, a microphone supporting 16 kHz mono, and a Windows desktop
@@ -94,3 +116,38 @@ If you have UV, you can install with:
 uv pip install --python .\.venv\Scripts\python.exe -r requirements.txt
 ```
 
+## Troubleshooting
+
+- **Microphone unavailable:** enable desktop microphone access in Windows privacy settings and select
+  a working default input in Windows Sound settings. The app retries its listener after input errors.
+- **Wake model missing:** run `python -m ultron.setup_model` using the virtual environment.
+- **Poor recognition:** wait for the tone, speak clearly, and use a headset. The small local model
+  trades accuracy for low resource use. The 16-bit PCM voice threshold in `audio.py` defaults to 450;
+  microphone gain and room noise may need tuning.
+- **No spoken replies:** enable Speak replies, and install a Windows desktop voice. The text response
+  remains visible if speech fails.
+- **Provider error:** check that the key, endpoint, and model ID match. Test connection. If the model
+  rejects tools, disable desktop tools and save. The conversation stream shows the error.
+- **Saved settings unavailable:** enter the connection again; encrypted keys are bound to your account.
+
+## Verification
+
+```powershell
+.\.venv\Scripts\python.exe -m unittest discover -s tests -v
+```
+
+25 tests cover transport/provider routing, tool feedback, cancellation, continuous recovery,
+conversation retention, wake matching, audio format, provider switching, typed command queuing,
+automatic listening startup, settings dialog behavior, and UI layout at default/minimum sizes. Cloud calls and desktop actions
+are mocked. A local smoke test also verified wake recognition and command transcription using
+synthetic Windows audio, and encrypted settings round-trip with a fake key. The interface was
+visually inspected. No real provider key was used; actual provider access and recognition of your
+voice require your configuration and microphone test.
+
+This is a regular Windows Python app; no Pinokio launcher files were created or changed.
+
+## References
+
+- [NVIDIA Nemotron chat API](https://docs.api.nvidia.com/nim/reference/nvidia-nemotron-3-5-lightning-30b-a3b-infer)
+- [NVIDIA Nemotron model and tool compatibility](https://docs.nvidia.com/nim/large-language-models/2.0.10/get-started/advanced/get-started-nemotron-3.5-lightning.html)
+- [Vosk models and licenses](https://alphacephei.com/vosk/models)
