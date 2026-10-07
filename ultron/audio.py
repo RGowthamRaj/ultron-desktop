@@ -62,7 +62,72 @@ class Listener:
         vosk.SetLogLevel(-1)
         self.model = vosk.Model(str(MODEL_PATH))
 
+    def listen(self, handle_command, typed=None):
+        import sounddevice as sd
+        import vosk
+        if self.model is None:
+            self.report('status', 'Loading local wake detector…')
+            self.load()
+        while not self.stopped():
+            if typed:
+                try:
+                    text = typed.get_nowait()
+                except queue.Empty:
+                    text = None
+                if text:
+                    self.handle(handle_command, text, 'text')
+                    continue
+            # Close the input stream before cloud processing and speech playback,
+            # so the assistant does not hear its own reply or retain background audio.
+            audio = queue.Queue(maxsize=100)
+            def callback(indata, frames, timing, status):
+                try:
+                    audio.put_nowait(bytes(indata))
+                except queue.Full:
+                    pass
+            recognizer = vosk.KaldiRecognizer(self.model, RATE,
+                json.dumps([WAKE_PHRASE, '[unk]']))
+            command = None
+            text_command = None
+            with sd.RawInputStream(samplerate=RATE, blocksize=1600, dtype='int16',
+                                   channels=1, callback=callback):
+                self.report('status', 'Listening locally · say “Hey computer”')
+                while not self.stopped():
+                    if typed:
+                        try:
+                            text_command = typed.get_nowait()
+                        except queue.Empty:
+                            pass
+                        if text_command:
+                            break
+                    try:
+                        data = audio.get(timeout=0.2)
+                    except queue.Empty:
+                        continue
+                    self.report('level', min(rms(data) / 6000, 1.0))
+                    if recognizer.AcceptWaveform(data):
+                        text = json.loads(recognizer.Result()).get('text', '')
+                        if is_wake(text):
+                            self.report('status', 'Awake · speak your command now')
+                            winsound.Beep(740, 100)
+                            # Discard pre-command blocks, including the acknowledgement tone.
+                            while True:
+                                try:
+                                    audio.get_nowait()
+                                except queue.Empty:
+                                    break
+                            command = self.capture(audio)
+                            break
+            if command and not self.stopped():
+                self.handle(handle_command, command, 'audio')
+            elif text_command and not self.stopped():
+                self.handle(handle_command, text_command, 'text')
 
+    def handle(self, handler, command, kind):
+        try:
+            handler(command, kind)
+        except Exception as exc:
+            self.report('error', str(exc))
 
     def capture(self, audio):
         chunks = []
