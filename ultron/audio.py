@@ -34,3 +34,33 @@ def to_wav(chunks):
     return output.getvalue()
 
 
+class Listener:
+    def __init__(self, stopped, report):
+        self.stopped = stopped
+        self.report = report
+        self.model = None
+
+    def transcribe(self, wav):
+        import vosk
+        if self.model is None:
+            self.load()
+        recognizer = vosk.KaldiRecognizer(self.model, RATE)
+        parts = []
+        with wave.open(io.BytesIO(wav), 'rb') as reader:
+            while data := reader.readframes(4000):
+                if self.stopped():
+                    return ''
+                if recognizer.AcceptWaveform(data):
+                    parts.append(json.loads(recognizer.Result()).get('text', ''))
+        parts.append(json.loads(recognizer.FinalResult()).get('text', ''))
+        return ' '.join(part for part in parts if part).strip()
+
+    def load(self):
+        import vosk
+        if not MODEL_PATH.is_dir():
+            raise RuntimeError('Wake model missing. Run: python -m ultron.setup_model')
+        vosk.SetLogLevel(-1)
+        self.model = vosk.Model(str(MODEL_PATH))
+
+
+
