@@ -64,3 +64,25 @@ class Listener:
 
 
 
+    def capture(self, audio):
+        chunks = []
+        started = time.monotonic()
+        last_voice = started
+        heard_voice = False
+        while not self.stopped() and time.monotonic() - started < 12:
+            try:
+                data = audio.get(timeout=0.2)
+            except queue.Empty:
+                continue
+            chunks.append(data)
+            now = time.monotonic()
+            if rms(data) > 450:
+                heard_voice = True
+                last_voice = now
+            self.report('level', min(rms(data) / 6000, 1.0))
+            if heard_voice and now - last_voice > 1.3:
+                break
+            if not heard_voice and now - started > 5:
+                self.report('status', 'No command detected · returning to wake listening')
+                return None
+        return to_wav(chunks) if heard_voice and not self.stopped() else None
