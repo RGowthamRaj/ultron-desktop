@@ -82,3 +82,51 @@ class Cloud:
         return result
 
 
+    def reply(self, text, stopped, report):
+        messages = [{'role': 'system', 'content': INSTRUCTIONS}]
+        messages += [item for turn in self.history[-6:] for item in turn]
+        turn = [{'role': 'user', 'content': text}]
+        messages += turn
+        for _ in range(4):
+            if stopped():
+                return ''
+            response = self.request(self.payload(messages))
+            if stopped():
+                return ''
+            try:
+                raw = response['choices'][0]['message']
+                message = {'role': 'assistant', 'content': raw.get('content') or ''}
+                calls = raw.get('tool_calls') or []
+                if calls:
+                    message['tool_calls'] = calls
+            except (KeyError, IndexError, TypeError):
+                raise RuntimeError('Provider returned an incompatible chat response.') from None
+            turn.append(message)
+            messages.append(message)
+            if not calls:
+                answer = re.sub(r'<think>.*?</think>', '', message['content'], flags=re.S).strip()
+                if not answer or '<think>' in answer:
+                    raise RuntimeError('Model produced no final answer. Use an instruct model or a larger output budget.')
+                self.history.append(turn)
+                self.history = self.history[-6:]
+                return answer
+            for call in calls:
+                if stopped():
+                    return ''
+                if not call.get('id'):
+                    raise RuntimeError('Provider returned a tool call without an ID.')
+                try:
+                    if not self.tools_enabled:
+                        raise ValueError('Desktop tools are disabled.')
+                    function = call['function']
+                    args = json.loads(function['arguments'])
+                    if not isinstance(args, dict):
+                        raise ValueError('Invalid tool arguments.')
+                    result = execute(function['name'], args)
+                except Exception as exc:
+                    result = f'Action failed: {exc}'
+                report('action', result)
+                item = {'role': 'tool', 'tool_call_id': call['id'], 'content': result}
+                messages.append(item)
+                turn.append(item)
+        return 'That sequence is too long. Please request one task at a time.'
