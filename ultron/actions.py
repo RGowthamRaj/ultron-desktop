@@ -27,6 +27,14 @@ TOOLS = [
 
 
 def execute(name, arguments):
+    if name == 'search_web':
+        query = arguments.get('query')
+        if not isinstance(query, str) or not query.strip() or len(query) > 500:
+            raise ValueError('Search query must contain 1–500 characters.')
+        opened = webbrowser.open('https://www.google.com/search?' + urlencode({'q': query}))
+        if not opened:
+            raise RuntimeError('Windows could not open the browser.')
+        return 'Opened search results. Their contents have not been read.'
     if name == 'open_app':
         app = arguments.get('app')
         if app not in APP_NAMES:
