@@ -71,5 +71,14 @@ class Cloud:
         except (json.JSONDecodeError, UnicodeDecodeError):
             raise RuntimeError('The endpoint did not return compatible JSON. Check its base URL.') from None
 
+    def payload(self, messages):
+        result = {'model': self.model, 'messages': messages, 'stream': False, 'max_tokens': 1024}
+        if self.tools_enabled:
+            result['tools'] = [{'type': 'function', 'function': {key: value for key, value in tool.items()
+                                      if key not in ('type', 'strict')}} for tool in TOOLS]
+            result['tool_choice'] = 'auto'
+        if urlsplit(self.base_url).hostname == 'integrate.api.nvidia.com' and 'nemotron' in self.model:
+            result['chat_template_kwargs'] = {'enable_thinking': False}
+        return result
 
 
