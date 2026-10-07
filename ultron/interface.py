@@ -84,7 +84,139 @@ class Interface:
     def button(self, parent, text, command, primary=False, width=160, height=42):
         return SoftButton(parent, text, command, primary, width, height)
 
+    def build(self):
+        self.root.geometry('1360x860')
+        self.root.minsize(1160, 760)
+        self.root.configure(bg=BG)
+        self.root.title('ULTRON · Personal intelligence')
+        self.root.columnconfigure(1, weight=1)
+        self.root.rowconfigure(0, weight=1)
+        style = ttk.Style(self.root)
+        style.configure('Dark.Vertical.TScrollbar', background='#24344b', troughcolor=PANEL,
+                        bordercolor=PANEL, arrowcolor=PANEL, gripcount=0, arrowsize=0)
+        style.configure('TCombobox', fieldbackground='#111e2e', background=LINE,
+                        foreground=TEXT, arrowcolor=CYAN, bordercolor=LINE, padding=8)
+        style.map('TCombobox', fieldbackground=[('readonly', '#111e2e')], foreground=[('readonly', TEXT)],
+                  selectbackground=[('readonly', '#111e2e')], selectforeground=[('readonly', TEXT)])
 
+        rail = tk.Frame(self.root, bg='#0a101a', width=198, padx=22, pady=28)
+        rail.grid(row=0, column=0, sticky='nsew')
+        rail.pack_propagate(False)
+        brand = tk.Frame(rail, bg=rail.cget('bg'))
+        brand.pack(fill='x', pady=(0, 48))
+        logo = tk.Canvas(brand, width=36, height=36, bg=rail.cget('bg'), highlightthickness=0)
+        logo.pack(side='left', padx=(0, 9))
+        logo.create_oval(3, 3, 32, 32, outline=CYAN, width=2)
+        logo.create_line(11, 12, 11, 22, 18, 26, 25, 22, 25, 12, fill=CYAN, width=2)
+        self.label(brand, 'ULTRON', size=13, color=TEXT, weight='bold').pack(side='left')
+        self.label(rail, 'WORKSPACE', size=8, color='#54677f').pack(anchor='w', pady=(0, 14))
+        self.button(rail, 'Assistant', self.focus_assistant, True, width=154).pack(fill='x', pady=(0, 10))
+        self.button(rail, 'Connection', self.open_settings, width=154).pack(fill='x', pady=(0, 10))
+        self.button(rail, 'Privacy & voice', self.open_privacy, width=154).pack(fill='x')
+        self.label(rail, 'QUICK ACTIONS', size=8, color='#54677f').pack(anchor='w', pady=(36, 14))
+        for text, prompt in [('Calculator', 'Open calculator'), ('Files', 'Open explorer'), ('Browser', 'Open browser')]:
+            self.button(rail, text, lambda p=prompt: self.send(p), width=154, height=36).pack(fill='x', pady=4)
+        rail_bottom = tk.Frame(rail, bg=rail.cget('bg'))
+        rail_bottom.pack(side='bottom', fill='x')
+        self.label(rail_bottom, 'YOUR AI', size=8, color='#54677f').pack(anchor='w')
+        self.label(rail_bottom, variable=self.provider, size=10, color=TEXT, wraplength=152,
+                   justify='left').pack(anchor='w', pady=(7, 5))
+        self.label(rail_bottom, variable=self.connection, size=8, color=BLUE).pack(anchor='w')
+        self.button(rail_bottom, 'Configure', self.open_settings, width=154, height=36).pack(fill='x', pady=(14, 22))
+        tk.Frame(rail_bottom, bg=LINE, height=1).pack(fill='x', pady=(0, 16))
+        self.label(rail_bottom, 'G', size=12, color=CYAN, weight='bold').pack(side='left')
+        profile = tk.Frame(rail_bottom, bg=rail.cget('bg'))
+        profile.pack(side='left', padx=12)
+        self.label(profile, 'Gowtham', size=10, color=TEXT).pack(anchor='w')
+        self.label(profile, 'Personal workspace', size=8).pack(anchor='w')
+
+        main = tk.Frame(self.root, bg=BG, padx=32, pady=26)
+        main.grid(row=0, column=1, sticky='nsew')
+        main.rowconfigure(1, weight=1)
+        main.columnconfigure(0, weight=1)
+        header = tk.Frame(main, bg=BG)
+        header.grid(row=0, column=0, sticky='ew', pady=(0, 18))
+        title = tk.Frame(header, bg=BG)
+        title.pack(side='left')
+        self.label(title, 'Assistant', size=21, color=TEXT, weight='bold').pack(anchor='w')
+        self.label(title, 'A little ahead of your next thought.', size=10).pack(anchor='w', pady=(5, 0))
+        self.label(header, variable=self.clock, size=9).pack(side='right', padx=(16, 0))
+        self.button(header, 'Connection settings', self.open_settings, width=160, height=38).pack(side='right')
+
+        content = tk.Frame(main, bg=BG)
+        content.grid(row=1, column=0, sticky='nsew')
+        content.rowconfigure(0, weight=1)
+        content.columnconfigure(0, weight=1)
+        center = tk.Frame(content, bg=BG)
+        center.grid(row=0, column=0, sticky='nsew', padx=(0, 28))
+        center.columnconfigure(0, weight=1)
+        center.rowconfigure(2, weight=1)
+        hour = datetime.now().hour
+        greeting = 'Good morning' if hour < 12 else 'Good afternoon' if hour < 18 else 'Good evening'
+        self.label(center, f'{greeting}, Gowtham.', size=11, color=MUTED).grid(row=0, column=0, pady=(8, 8))
+        self.hero_title = self.label(center, 'Ready when you are.', size=28, color=TEXT, weight='bold')
+        self.hero_title.grid(row=1, column=0)
+        self.hud = tk.Canvas(center, bg=BG, height=340, highlightthickness=0)
+        self.hud.grid(row=2, column=0, sticky='nsew', pady=(0, 0))
+        state_row = tk.Frame(center, bg=BG)
+        state_row.grid(row=3, column=0, pady=(0, 10))
+        self.state_label = self.label(state_row, 'STANDBY', size=9, color=CYAN, weight='bold')
+        self.state_label.pack()
+        self.label(center, variable=self.status, size=10, color=MUTED, wraplength=460).grid(row=4, column=0, pady=(0, 16))
+        suggestions = tk.Frame(center, bg=BG)
+        suggestions.grid(row=5, column=0, sticky='ew', pady=(0, 12))
+        suggestions.columnconfigure((0, 1), weight=1)
+        self.button(suggestions, 'Open calculator', lambda: self.send('Open calculator'), width=180, height=38).grid(row=0, column=0, sticky='ew', padx=(0, 6))
+        self.button(suggestions, 'Explain a concept', lambda: self.send('Ask me which concept I would like explained.'), width=180, height=38).grid(row=0, column=1, sticky='ew', padx=(6, 0))
+        dock = tk.Frame(center, bg=PANEL, padx=14, pady=14, highlightthickness=1, highlightbackground=LINE)
+        dock.grid(row=6, column=0, sticky='ew')
+        dock.columnconfigure(0, weight=1)
+        self.label(dock, 'MESSAGE ULTRON', size=8, color='#61748e').grid(row=0, column=0, sticky='w', pady=(0, 7))
+        self.input = tk.Entry(dock, bg=PANEL, fg=TEXT, insertbackground=CYAN, font=('Segoe UI', 12), relief='flat', bd=0)
+        self.input.grid(row=1, column=0, sticky='ew', ipady=8, padx=(0, 8))
+        self.input.bind('<Return>', lambda event: self.send())
+        self.button(dock, 'Send', self.send, True, width=66, height=38).grid(row=1, column=1)
+        controls = tk.Frame(center, bg=BG)
+        controls.grid(row=7, column=0, sticky='ew', pady=(12, 0))
+        self.mute_button = self.button(controls, 'MUTE MICROPHONE', self.toggle_listening, width=150, height=36)
+        self.mute_button.pack(side='left')
+        self.label(controls, 'Say “Hey computer” to begin', size=9, color=MUTED).pack(side='right')
+
+        stream = tk.Frame(content, bg=PANEL, width=318, padx=20, pady=20, highlightthickness=1, highlightbackground='#142032')
+        stream.grid(row=0, column=1, sticky='nsew')
+        stream.pack_propagate(False)
+        stream_head = tk.Frame(stream, bg=PANEL)
+        stream_head.pack(fill='x', pady=(0, 7))
+        self.label(stream_head, 'Conversation', size=13, color=TEXT, weight='bold').pack(side='left')
+        tk.Button(stream_head, text='Clear', command=self.clear, bg=PANEL, fg=MUTED,
+                  activebackground=PANEL, activeforeground=CYAN, bd=0, relief='flat',
+                  font=('Segoe UI', 9), cursor='hand2').pack(side='right')
+        self.label(stream, 'Your current session', size=9).pack(anchor='w', pady=(0, 18))
+        tk.Frame(stream, bg=LINE, height=1).pack(fill='x', pady=(0, 16))
+        log_frame = tk.Frame(stream, bg=PANEL)
+        log_frame.pack(fill='both', expand=True)
+        self.log = tk.Text(log_frame, bg=PANEL, fg=TEXT, font=('Segoe UI', 11), wrap='word',
+                           relief='flat', bd=0, highlightthickness=0, padx=0, pady=0, width=25)
+        scrollbar = ttk.Scrollbar(log_frame, style='Dark.Vertical.TScrollbar', command=self.log.yview)
+        self.log.configure(yscrollcommand=scrollbar.set)
+        scrollbar.pack(side='right', fill='y')
+        self.log.pack(fill='both', expand=True)
+        for name, color in [('SYSTEM', MUTED), ('YOU', CYAN), ('ULTRON', TEXT), ('DESKTOP', BLUE), ('ISSUE', '#efb77c')]:
+            self.log.tag_configure(name, foreground=color, spacing1=3, spacing3=6)
+            self.log.tag_configure(name+'-title', foreground=color, font=('Segoe UI', 8, 'bold'), spacing1=10, spacing3=7)
+        self.log.configure(state='disabled')
+        stream_foot = tk.Frame(stream, bg=PANEL)
+        stream_foot.pack(fill='x', pady=(14, 0))
+        self.label(stream_foot, 'History clears when the app closes.', size=8).pack(anchor='w')
+        footer = tk.Frame(main, bg=BG)
+        footer.grid(row=2, column=0, sticky='ew', pady=(20, 0))
+        self.label(footer, 'LOCAL VOICE  ·  ENCRYPTED KEYS', size=8, color='#536983').pack(side='left')
+        self.label(footer, variable=self.uptime, size=8, color='#536983').pack(side='right')
+        self.build_settings()
+
+    def focus_assistant(self):
+        self.settings_window.withdraw()
+        self.input.focus_set()
 
     def open_settings(self):
         window = self.settings_window
@@ -149,5 +281,11 @@ class Interface:
         if self.apply():
             self.settings_window.withdraw()
 
+    def write(self, speaker, text):
+        self.log.configure(state='normal')
+        self.log.insert('end', f'{speaker.title()}  ·  {datetime.now():%H:%M}\n', speaker+'-title')
+        self.log.insert('end', str(text)+'\n\n', speaker)
+        self.log.see('end')
+        self.log.configure(state='disabled')
 
 
