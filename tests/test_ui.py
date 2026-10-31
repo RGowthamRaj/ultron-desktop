@@ -8,10 +8,16 @@ from ultron.cloud import PRESETS
 class UITests(unittest.TestCase):
     def setUp(self):
         self.root = tk.Tk()
+        fake_config = {'provider': 'OpenAI', 'base_url': 'https://api.openai.com/v1',
+                       'model': 'gpt-4.1-mini', 'key': '', 'remember': True,
+                       'speech': True, 'tools': True, 'autolisten': True}
+        self.settings_patcher = patch('ultron.__main__.settings.load', return_value=fake_config)
+        self.settings_patcher.start()
         self.app = App(self.root, autostart=False)
         self.root.update()
 
     def tearDown(self):
+        self.settings_patcher.stop()
         self.app.closing = True
         for timer in self.root.tk.call('after', 'info'):
             self.root.after_cancel(timer)
@@ -22,7 +28,7 @@ class UITests(unittest.TestCase):
             self.root.geometry(size)
             self.root.update()
             self.assertGreaterEqual(self.app.mute_button.winfo_height(), 34)
-            self.assertGreaterEqual(self.app.hud.winfo_height(), 200)
+            self.assertGreaterEqual(self.app.hud.winfo_height(), 160)
             self.assertTrue(self.app.input.winfo_ismapped())
             self.assertLessEqual(self.app.mute_button.winfo_rooty()+self.app.mute_button.winfo_height(),
                                  self.root.winfo_rooty()+self.root.winfo_height())

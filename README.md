@@ -24,18 +24,18 @@ register itself to start at Windows login.
 
 ## Connect your AI provider once
 
-1. Open **Connection settings** (or **Connection** in the sidebar), then choose **NVIDIA Nemotron**,
-   **OpenAI**, or **Custom compatible API**.
+1. Open **Connection settings** (or **Connection** in the sidebar), then choose **Gemini 4 Argon**,
+   **NVIDIA Nemotron**, **OpenAI**, or **Custom compatible API**.
 2. Enter that provider's API key, base URL, and model ID.
 3. Use **Test connection** to check access without running desktop actions.
 4. Choose **Save connection**. Leave **Listen automatically on launch** enabled.
 
+The Gemini preset uses `https://generativelanguage.googleapis.com/v1beta/openai` and `gemini-4-argon`.
 The NVIDIA preset uses `https://integrate.api.nvidia.com/v1` and
 `nvidia/nemotron-3.5-lightning-30b-a3b`. The OpenAI preset uses `https://api.openai.com/v1` and
-`gpt-4.1-mini`. Both model IDs are editable. Custom APIs must implement OpenAI-compatible
+`gpt-4.1-mini`. All model IDs are editable. Custom APIs must implement OpenAI-compatible
 `POST /chat/completions`, bearer authentication, and a compatible response schema. The provider
 must permit the selected model. A key for one provider cannot authenticate with another provider.
-Native Anthropic or Google APIs need a compatible gateway or a separate adapter.
 
 Switching provider clears the unsaved key field. Changing provider/model settings takes effect after
 you save. Some chat models do not support tool calling: disable **Enable desktop tools** to use
@@ -45,7 +45,7 @@ remote providers require HTTPS. The app does not forward credentials through HTT
 **Remember encrypted key** stores it encrypted by Windows DPAPI for your current Windows account.
 Preferences live at `%APPDATA%\Ultron\settings.json`. Uncheck Remember and save to remove the stored
 key. The key is masked in the interface and is not included in source files or GitHub commits.
-The optional environment variables `NVIDIA_API_KEY`, `OPENAI_API_KEY`, and `ULTRON_MODEL` supply
+The optional environment variables `GOOGLE_API_KEY`, `NVIDIA_API_KEY`, `OPENAI_API_KEY`, and `ULTRON_MODEL` supply
 initial defaults when no saved configuration exists.
 
 ## Things to say
@@ -136,7 +136,7 @@ uv pip install --python .\.venv\Scripts\python.exe -r requirements.txt
 .\.venv\Scripts\python.exe -m unittest discover -s tests -v
 ```
 
-25 tests cover transport/provider routing, tool feedback, cancellation, continuous recovery,
+33 tests cover transport/provider routing, Gemini payload handling, credential isolation, tool feedback, cancellation, continuous recovery,
 conversation retention, wake matching, audio format, provider switching, typed command queuing,
 automatic listening startup, settings dialog behavior, and UI layout at default/minimum sizes. Cloud calls and desktop actions
 are mocked. A local smoke test also verified wake recognition and command transcription using
@@ -148,6 +148,7 @@ This is a regular Windows Python app; no Pinokio launcher files were created or 
 
 ## References
 
+- [Google Gemini OpenAI-compatible chat API](https://ai.google.dev/gemini-api/docs/openai)
 - [NVIDIA Nemotron chat API](https://docs.api.nvidia.com/nim/reference/nvidia-nemotron-3-5-lightning-30b-a3b-infer)
 - [NVIDIA Nemotron model and tool compatibility](https://docs.nvidia.com/nim/large-language-models/2.0.10/get-started/advanced/get-started-nemotron-3.5-lightning.html)
 - [Vosk models and licenses](https://alphacephei.com/vosk/models)

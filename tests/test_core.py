@@ -11,6 +11,7 @@ from unittest.mock import Mock, patch
 from ultron.actions import execute, TOOLS
 from ultron.audio import Listener, is_wake, rms, to_wav
 from ultron.cloud import Cloud, validate_endpoint, PRESETS
+from ultron import settings
 
 
 class AudioTests(unittest.TestCase):
@@ -162,6 +163,32 @@ class CloudTests(unittest.TestCase):
         cloud.reply('Open calculator', lambda: False, lambda *args: None)
         action.assert_not_called()
 
+    @patch('ultron.cloud.execute', return_value='Opened calculator.')
+    def test_dispatched_action_preserved_in_history_on_followup_failure(self, action):
+        cloud = Cloud('test-key')
+        cloud.request = Mock(side_effect=[call(), RuntimeError('API dropped connection')])
+        with self.assertRaises(RuntimeError):
+            cloud.reply('Open calculator', lambda: False, lambda *args: None)
+        action.assert_called_once_with('open_app', {'app': 'calculator'})
+        self.assertEqual(len(cloud.history), 1)
+        turn = cloud.history[0]
+        self.assertEqual(turn[0]['role'], 'user')
+        self.assertTrue(any(item.get('role') == 'tool' and item.get('content') == 'Opened calculator.' for item in turn))
+
+    @patch('ultron.cloud.execute')
+    def test_dispatched_action_preserved_in_history_on_cancellation(self, action):
+        cloud = Cloud('test-key')
+        stopped_state = [False]
+        def fake_execute(name, args):
+            stopped_state[0] = True
+            return 'Opened calculator.'
+        action.side_effect = fake_execute
+        cloud.request = Mock(return_value=call())
+        res = cloud.reply('Open calculator', lambda: stopped_state[0], lambda *args: None)
+        self.assertEqual(res, '')
+        self.assertEqual(len(cloud.history), 1)
+        self.assertTrue(any(item.get('role') == 'tool' for item in cloud.history[0]))
+
     def test_request_routes_key_to_configured_provider(self):
         cloud = Cloud('fake-nvidia-key', 'custom-model', 'https://integrate.api.nvidia.com/v1')
         response = Mock()
@@ -177,6 +204,100 @@ class CloudTests(unittest.TestCase):
         request = opener.open.call_args.args[0]
         self.assertEqual(request.full_url, 'https://integrate.api.nvidia.com/v1/chat/completions')
         self.assertEqual(request.get_header('Authorization'), 'Bearer fake-nvidia-key')
+
+    def test_gemini_payload_omits_tool_choice(self):
+        endpoint, model = PRESETS['Gemini 4 Argon']
+        cloud = Cloud('gemini-key', model, endpoint)
+        payload = cloud.payload([])
+        self.assertIn('tools', payload)
+        self.assertNotIn('tool_choice', payload)
+
+    def test_gemini_uses_larger_token_budget(self):
+        endpoint, model = PRESETS['Gemini 4 Argon']
+        cloud = Cloud('gemini-key', model, endpoint)
+        payload = cloud.payload([])
+        self.assertGreater(payload['max_tokens'], 1024)
+
+
+class SettingsTests(unittest.TestCase):
+    def test_env_key_not_leaked_to_saved_custom_or_mismatched_provider(self):
+        from pathlib import Path
+        import tempfile
+        import os
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / 'settings.json'
+            path.write_text(json.dumps({
+                'provider': 'Custom compatible API',
+                'base_url': 'https://custom-gateway.local/v1',
+                'model': 'custom-model',
+                'remember': True,
+                'speech': True,
+                'tools': True,
+                'autolisten': True
+            }), encoding='utf-8')
+            with patch.dict(os.environ, {'OPENAI_API_KEY': 'sk-secret-openai-key'}):
+                config = settings.load(path)
+                self.assertEqual(config['provider'], 'Custom compatible API')
+                self.assertEqual(config['base_url'], 'https://custom-gateway.local/v1')
+                self.assertEqual(config['key'], '', 'OpenAI key must never leak to custom provider')
+
+    def test_env_key_not_leaked_to_customized_base_url(self):
+        from pathlib import Path
+        import tempfile
+        import os
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / 'settings.json'
+            path.write_text(json.dumps({
+                'provider': 'OpenAI',
+                'base_url': 'https://untrusted-proxy.example.com/v1',
+                'model': 'gpt-4.1-mini',
+                'remember': True,
+                'speech': True,
+                'tools': True,
+                'autolisten': True
+            }), encoding='utf-8')
+            with patch.dict(os.environ, {'OPENAI_API_KEY': 'sk-secret-openai-key'}):
+                config = settings.load(path)
+                self.assertEqual(config['key'], '', 'Env key must not be sent to non-standard endpoint')
+
+    def test_env_key_used_when_matching_standard_preset_without_saved_key(self):
+        from pathlib import Path
+        import tempfile
+        import os
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / 'settings.json'
+            path.write_text(json.dumps({
+                'provider': 'OpenAI',
+                'base_url': 'https://api.openai.com/v1',
+                'model': 'gpt-4.1-mini',
+                'remember': True,
+                'speech': True,
+                'tools': True,
+                'autolisten': True
+            }), encoding='utf-8')
+            with patch.dict(os.environ, {'OPENAI_API_KEY': 'sk-secret-openai-key'}):
+                config = settings.load(path)
+                self.assertEqual(config['key'], 'sk-secret-openai-key')
+
+    def test_google_api_key_used_for_gemini_preset(self):
+        from pathlib import Path
+        import tempfile
+        import os
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / 'settings.json'
+            path.write_text(json.dumps({
+                'provider': 'Gemini 4 Argon',
+                'base_url': 'https://generativelanguage.googleapis.com/v1beta/openai',
+                'model': 'gemini-4-argon',
+                'remember': True,
+                'speech': True,
+                'tools': True,
+                'autolisten': True
+            }), encoding='utf-8')
+            with patch.dict(os.environ, {'GOOGLE_API_KEY': 'AIza-test-gemini-key'}):
+                config = settings.load(path)
+                self.assertEqual(config['provider'], 'Gemini 4 Argon')
+                self.assertEqual(config['key'], 'AIza-test-gemini-key')
 
 
 if __name__ == '__main__':

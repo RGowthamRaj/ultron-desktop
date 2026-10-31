@@ -14,6 +14,10 @@ CYAN = '#7de7ff'
 BLUE = '#54b7ed'
 TEXT = '#ecf4fc'
 MUTED = '#8595ab'
+GEMINI = '#a8c7fa'   # Google blue for Gemini badge
+ACCENT = '#7de7ff'   # Same as CYAN, just a named alias for clarity
+SUCCESS = '#6ee7b7'  # Teal green for verified states
+WARN = '#fbbf24'     # Amber for warnings
 
 
 def round_rect(draw, box, radius, fill, outline=None):
@@ -119,9 +123,16 @@ class Interface:
         rail_bottom = tk.Frame(rail, bg=rail.cget('bg'))
         rail_bottom.pack(side='bottom', fill='x')
         self.label(rail_bottom, 'YOUR AI', size=8, color='#54677f').pack(anchor='w')
-        self.label(rail_bottom, variable=self.provider, size=10, color=TEXT, wraplength=152,
-                   justify='left').pack(anchor='w', pady=(7, 5))
-        self.label(rail_bottom, variable=self.connection, size=8, color=BLUE).pack(anchor='w')
+        provider_row = tk.Frame(rail_bottom, bg=rail.cget('bg'))
+        provider_row.pack(anchor='w', fill='x', pady=(7, 4))
+        self.provider_badge = tk.Label(provider_row, text='G', bg='#1a3a5c', fg=GEMINI,
+                                       font=('Segoe UI', 9, 'bold'), padx=5, pady=2,
+                                       relief='flat', bd=0)
+        self.provider_badge.pack(side='left', padx=(0, 6))
+        self.label(provider_row, variable=self.provider, size=10, color=TEXT, wraplength=120,
+                   justify='left').pack(side='left', anchor='w')
+        self.connection_label = self.label(rail_bottom, variable=self.connection, size=8, color=BLUE)
+        self.connection_label.pack(anchor='w')
         self.button(rail_bottom, 'Configure', self.open_settings, width=154, height=36).pack(fill='x', pady=(14, 22))
         tk.Frame(rail_bottom, bg=LINE, height=1).pack(fill='x', pady=(0, 16))
         self.label(rail_bottom, 'G', size=12, color=CYAN, weight='bold').pack(side='left')
@@ -139,7 +150,7 @@ class Interface:
         title = tk.Frame(header, bg=BG)
         title.pack(side='left')
         self.label(title, 'Assistant', size=21, color=TEXT, weight='bold').pack(anchor='w')
-        self.label(title, 'A little ahead of your next thought.', size=10).pack(anchor='w', pady=(5, 0))
+        self.label(title, 'Powered by your chosen intelligence.', size=10).pack(anchor='w', pady=(5, 0))
         self.label(header, variable=self.clock, size=9).pack(side='right', padx=(16, 0))
         self.button(header, 'Connection settings', self.open_settings, width=160, height=38).pack(side='right')
 
@@ -168,6 +179,9 @@ class Interface:
         suggestions.columnconfigure((0, 1), weight=1)
         self.button(suggestions, 'Open calculator', lambda: self.send('Open calculator'), width=180, height=38).grid(row=0, column=0, sticky='ew', padx=(0, 6))
         self.button(suggestions, 'Explain a concept', lambda: self.send('Ask me which concept I would like explained.'), width=180, height=38).grid(row=0, column=1, sticky='ew', padx=(6, 0))
+        suggestions.columnconfigure((0, 1, 2), weight=1)
+        self.button(suggestions, 'Summarise my day', lambda: self.send('Give me a brief summary of what you can help me with today.'), width=180, height=38).grid(row=1, column=0, sticky='ew', padx=(0, 6), pady=(6, 0))
+        self.button(suggestions, 'Search the web', lambda: self.send('Search the web for the latest news'), width=180, height=38).grid(row=1, column=1, sticky='ew', padx=(6, 0), pady=(6, 0))
         dock = tk.Frame(center, bg=PANEL, padx=14, pady=14, highlightthickness=1, highlightbackground=LINE)
         dock.grid(row=6, column=0, sticky='ew')
         dock.columnconfigure(0, weight=1)
@@ -210,7 +224,7 @@ class Interface:
         self.label(stream_foot, 'History clears when the app closes.', size=8).pack(anchor='w')
         footer = tk.Frame(main, bg=BG)
         footer.grid(row=2, column=0, sticky='ew', pady=(20, 0))
-        self.label(footer, 'LOCAL VOICE  ·  ENCRYPTED KEYS', size=8, color='#536983').pack(side='left')
+        self.label(footer, 'LOCAL VOICE  ·  ENCRYPTED KEYS  ·  GEMINI 4 ARGON READY', size=8, color='#536983').pack(side='left')
         self.label(footer, variable=self.uptime, size=8, color='#536983').pack(side='right')
         self.build_settings()
 
@@ -239,7 +253,7 @@ class Interface:
         frame = tk.Frame(window, bg=BG, padx=32, pady=28)
         frame.pack(fill='both', expand=True)
         self.label(frame, 'Your intelligence. Your choice.', size=23, color=TEXT, weight='bold').pack(anchor='w')
-        self.label(frame, 'Connect your provider once. Ultron takes it from there.', size=11).pack(anchor='w', pady=(7, 24))
+        self.label(frame, 'Connect your provider once. Works with Gemini 4 Argon, OpenAI, NVIDIA, and custom APIs.', size=11).pack(anchor='w', pady=(7, 24))
         body = tk.Frame(frame, bg=BG)
         body.pack(fill='both', expand=True)
         form = tk.Frame(body, bg=BG, width=410)
@@ -268,7 +282,7 @@ class Interface:
         self.label(options, 'Private by design', size=12, color=TEXT, weight='bold').pack(anchor='w')
         self.label(options, 'Audio is processed on your PC.\nOnly recognized text goes to\nyour chosen AI provider.\n\nRemembered keys are encrypted\nfor your Windows account.',
                    size=9, justify='left', wraplength=210).pack(anchor='w', pady=(10, 0))
-        self.label(frame, 'Supports OpenAI-compatible chat APIs. Your key must match the provider.', size=9).pack(anchor='w', pady=(18, 16))
+        self.label(frame, 'Supports Google Gemini, OpenAI-compatible, and custom chat APIs. Your key must match the provider.', size=9).pack(anchor='w', pady=(18, 16))
         actions = tk.Frame(frame, bg=BG)
         actions.pack(fill='x')
         self.test_button = self.button(actions, 'Test connection', self.test_connection, width=155)
@@ -387,9 +401,12 @@ class Interface:
         self.clock.set(datetime.now().strftime('%H:%M  ·  %d %b'))
         seconds = int(time.monotonic()-self.started)
         self.uptime.set(f'Session {seconds//60:02d}:{seconds%60:02d}  ·  {self.commands} commands')
-        self.state_label.configure(text={'LISTENING': '●  Listening', 'MUTED': 'Microphone paused',
-            'CAPTURING': '●  Voice detected', 'THINKING': 'Processing your request',
-            'SPEAKING': 'Ultron is speaking', 'PROCESSING': 'Preparing', 'STANDBY': 'Ready'}.get(self.state, self.state))
+        state_text = {'LISTENING': '●  Listening', 'MUTED': '○  Microphone paused',
+            'CAPTURING': '◉  Voice detected', 'THINKING': '◈  Processing request',
+            'SPEAKING': '◎  Speaking', 'PROCESSING': '◌  Preparing', 'STANDBY': '○  Ready'}.get(self.state, self.state)
+        state_color = {'LISTENING': CYAN, 'CAPTURING': CYAN, 'THINKING': GEMINI, 'SPEAKING': SUCCESS,
+                       'MUTED': MUTED, 'STANDBY': MUTED, 'PROCESSING': BLUE}.get(self.state, MUTED)
+        self.state_label.configure(text=state_text, fg=state_color)
         self.hero_title.configure(text={'CAPTURING': 'I’m listening.', 'THINKING': 'Connecting the dots.',
             'SPEAKING': 'Consider it handled.', 'MUTED': 'A moment of quiet.'}.get(self.state, 'Ready when you are.'))
         width = max(self.hud.winfo_width(), 260)

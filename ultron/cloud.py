@@ -7,6 +7,7 @@ from urllib.request import Request, build_opener, HTTPRedirectHandler
 from .actions import TOOLS, execute
 
 PRESETS = {
+    'Gemini 4 Argon': ('https://generativelanguage.googleapis.com/v1beta/openai', 'gemini-4-argon'),
     'NVIDIA Nemotron': ('https://integrate.api.nvidia.com/v1', 'nvidia/nemotron-3.5-lightning-30b-a3b'),
     'OpenAI': ('https://api.openai.com/v1', 'gpt-4.1-mini'),
     'Custom compatible API': ('https://your-provider.example/v1', ''),
@@ -72,12 +73,22 @@ class Cloud:
             raise RuntimeError('The endpoint did not return compatible JSON. Check its base URL.') from None
 
     def payload(self, messages):
-        result = {'model': self.model, 'messages': messages, 'stream': False, 'max_tokens': 1024}
-        if self.tools_enabled:
+        hostname = urlsplit(self.base_url).hostname or ''
+        is_gemini = 'generativelanguage.googleapis.com' in hostname
+        is_nemotron = hostname == 'integrate.api.nvidia.com' and 'nemotron' in self.model
+        # Gemini 4 Argon supports larger context; give it more room
+        max_tokens = 2048 if is_gemini else 1024
+        result = {'model': self.model, 'messages': messages, 'stream': False, 'max_tokens': max_tokens}
+        if self.tools_enabled and not is_gemini:
+            # Gemini's OpenAI-compat layer doesn't always support tool_choice=auto; skip it
             result['tools'] = [{'type': 'function', 'function': {key: value for key, value in tool.items()
                                       if key not in ('type', 'strict')}} for tool in TOOLS]
             result['tool_choice'] = 'auto'
-        if urlsplit(self.base_url).hostname == 'integrate.api.nvidia.com' and 'nemotron' in self.model:
+        elif self.tools_enabled and is_gemini:
+            result['tools'] = [{'type': 'function', 'function': {key: value for key, value in tool.items()
+                                      if key not in ('type', 'strict')}} for tool in TOOLS]
+            # Gemini infers tool use from context; tool_choice omitted intentionally
+        if is_nemotron:
             result['chat_template_kwargs'] = {'enable_thinking': False}
         return result
 
@@ -93,46 +104,60 @@ class Cloud:
         messages += [item for turn in self.history[-6:] for item in turn]
         turn = [{'role': 'user', 'content': text}]
         messages += turn
-        for _ in range(4):
-            if stopped():
-                return ''
-            response = self.request(self.payload(messages))
-            if stopped():
-                return ''
-            try:
-                raw = response['choices'][0]['message']
-                message = {'role': 'assistant', 'content': raw.get('content') or ''}
-                calls = raw.get('tool_calls') or []
-                if calls:
-                    message['tool_calls'] = calls
-            except (KeyError, IndexError, TypeError):
-                raise RuntimeError('Provider returned an incompatible chat response.') from None
-            turn.append(message)
-            messages.append(message)
-            if not calls:
-                answer = re.sub(r'<think>.*?</think>', '', message['content'], flags=re.S).strip()
-                if not answer or '<think>' in answer:
-                    raise RuntimeError('Model produced no final answer. Use an instruct model or a larger output budget.')
+
+        def record_partial_turn():
+            if any(item.get('role') == 'tool' for item in turn) and turn not in self.history:
                 self.history.append(turn)
                 self.history = self.history[-6:]
-                return answer
-            for call in calls:
+
+        try:
+            for _ in range(4):
                 if stopped():
+                    record_partial_turn()
                     return ''
-                if not call.get('id'):
-                    raise RuntimeError('Provider returned a tool call without an ID.')
+                response = self.request(self.payload(messages))
+                if stopped():
+                    record_partial_turn()
+                    return ''
                 try:
-                    if not self.tools_enabled:
-                        raise ValueError('Desktop tools are disabled.')
-                    function = call['function']
-                    args = json.loads(function['arguments'])
-                    if not isinstance(args, dict):
-                        raise ValueError('Invalid tool arguments.')
-                    result = execute(function['name'], args)
-                except Exception as exc:
-                    result = f'Action failed: {exc}'
-                report('action', result)
-                item = {'role': 'tool', 'tool_call_id': call['id'], 'content': result}
-                messages.append(item)
-                turn.append(item)
-        return 'That sequence is too long. Please request one task at a time.'
+                    raw = response['choices'][0]['message']
+                    message = {'role': 'assistant', 'content': raw.get('content') or ''}
+                    calls = raw.get('tool_calls') or []
+                    if calls:
+                        message['tool_calls'] = calls
+                except (KeyError, IndexError, TypeError):
+                    raise RuntimeError('Provider returned an incompatible chat response.') from None
+                turn.append(message)
+                messages.append(message)
+                if not calls:
+                    answer = re.sub(r'<think(?:ing)?>.*?</think(?:ing)?>', '', message['content'], flags=re.S).strip()
+                    if not answer or '<think' in answer:
+                        raise RuntimeError('Model produced no final answer. Use an instruct model or a larger output budget.')
+                    self.history.append(turn)
+                    self.history = self.history[-6:]
+                    return answer
+                for call in calls:
+                    if stopped():
+                        record_partial_turn()
+                        return ''
+                    if not call.get('id'):
+                        raise RuntimeError('Provider returned a tool call without an ID.')
+                    try:
+                        if not self.tools_enabled:
+                            raise ValueError('Desktop tools are disabled.')
+                        function = call['function']
+                        args = json.loads(function['arguments'])
+                        if not isinstance(args, dict):
+                            raise ValueError('Invalid tool arguments.')
+                        result = execute(function['name'], args)
+                    except Exception as exc:
+                        result = f'Action failed: {exc}'
+                    report('action', result)
+                    item = {'role': 'tool', 'tool_call_id': call['id'], 'content': result}
+                    messages.append(item)
+                    turn.append(item)
+            record_partial_turn()
+            return 'That sequence is too long. Please request one task at a time.'
+        except Exception:
+            record_partial_turn()
+            raise

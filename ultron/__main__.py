@@ -13,7 +13,7 @@ from .audio import Listener
 from .cloud import Cloud, PRESETS
 from . import settings
 from .speech import speak
-from .interface import Interface, BG, PANEL, LINE, CYAN, BLUE, TEXT, MUTED
+from .interface import Interface, BG, PANEL, LINE, CYAN, BLUE, TEXT, MUTED, GEMINI, SUCCESS
 
 
 
@@ -54,7 +54,7 @@ class App(Interface):
             self.cloud = self.make_cloud()
         except ValueError:
             pass
-        root.title('ULTRON · JARVIS interface')
+        root.title('ULTRON · Personal Intelligence')
         root.geometry('1280x880')
         root.minsize(1160, 850)
         root.configure(bg=BG)
@@ -67,6 +67,7 @@ class App(Interface):
         root.option_add('*TCombobox*Listbox.background', PANEL)
         root.option_add('*TCombobox*Listbox.foreground', TEXT)
         self.build()
+        self._refresh_provider_badge()
         self.write('SYSTEM', 'Welcome back. Say “Hey computer”, wait for the tone, then speak.')
         self.write('SYSTEM', 'Use Connection to choose your AI provider. Listening resumes automatically after each reply.')
         if config.get('notice'):
@@ -86,6 +87,22 @@ class App(Interface):
         self.model.set(model)
         self.key.set('')  # Never send one provider's key to another provider by accident.
         self.connection.set('SAVE NEW CONNECTION')
+        self._refresh_provider_badge()
+
+    def _refresh_provider_badge(self):
+        """Update the sidebar provider badge letter and color to reflect the active provider."""
+        if not hasattr(self, 'provider_badge'):
+            return
+        prov = self.provider.get()
+        if 'Gemini' in prov:
+            letter, bg, fg = 'G', '#1a3a5c', GEMINI
+        elif 'NVIDIA' in prov or 'Nemotron' in prov:
+            letter, bg, fg = 'N', '#1a2d1a', SUCCESS
+        elif 'OpenAI' in prov:
+            letter, bg, fg = 'O', '#1a2530', CYAN
+        else:
+            letter, bg, fg = '\u2699', '#252525', MUTED
+        self.provider_badge.configure(text=letter, bg=bg, fg=fg)
 
     def config(self):
         return {'provider': self.provider.get(), 'base_url': self.endpoint.get(), 'model': self.model.get(),

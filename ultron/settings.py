@@ -32,10 +32,18 @@ def protect(data, decrypt=False):
 
 
 def load(path=SETTINGS_PATH):
-    provider = 'OpenAI' if os.environ.get('OPENAI_API_KEY') else 'NVIDIA Nemotron'
+    if os.environ.get('GOOGLE_API_KEY'):
+        provider = 'Gemini 4 Argon'
+    elif os.environ.get('OPENAI_API_KEY'):
+        provider = 'OpenAI'
+    else:
+        provider = 'NVIDIA Nemotron'
     base, model = PRESETS[provider]
+    env_keys = {'Gemini 4 Argon': os.environ.get('GOOGLE_API_KEY', ''),
+                'OpenAI': os.environ.get('OPENAI_API_KEY', ''),
+                'NVIDIA Nemotron': os.environ.get('NVIDIA_API_KEY', '')}
     config = {'provider': provider, 'base_url': base, 'model': os.environ.get('ULTRON_MODEL', model),
-              'key': os.environ.get('OPENAI_API_KEY', '') if provider == 'OpenAI' else os.environ.get('NVIDIA_API_KEY', ''),
+              'key': env_keys.get(provider, ''),
               'remember': True, 'speech': True, 'tools': True, 'autolisten': True}
     try:
         saved = json.loads(path.read_text(encoding='utf-8'))
@@ -44,6 +52,21 @@ def load(path=SETTINGS_PATH):
                 config[key] = saved[key]
         if saved.get('encrypted_key'):
             config['key'] = protect(base64.b64decode(saved['encrypted_key']), decrypt=True).decode()
+        else:
+            active_provider = config['provider']
+            env_key_map = {
+                'Gemini 4 Argon': ('GOOGLE_API_KEY', PRESETS['Gemini 4 Argon'][0]),
+                'OpenAI': ('OPENAI_API_KEY', PRESETS['OpenAI'][0]),
+                'NVIDIA Nemotron': ('NVIDIA_API_KEY', PRESETS['NVIDIA Nemotron'][0]),
+            }
+            if active_provider in env_key_map:
+                env_var, expected_base = env_key_map[active_provider]
+                if config['base_url'] == expected_base:
+                    config['key'] = os.environ.get(env_var, '')
+                else:
+                    config['key'] = ''
+            else:
+                config['key'] = ''
     except FileNotFoundError:
         pass
     except Exception:
