@@ -21,12 +21,18 @@ TOOLS = [
     tool('open_app', 'Open a supported desktop application.', 'app', {'type': 'string', 'enum': APP_NAMES}),
     tool('search_web', 'Open web search results in the default browser. This does not read results.',
          'query', {'type': 'string'}),
-    tool('media_control', 'Control system volume or media playback.', 'action',
+    tool('media_control', 'Send one Windows media key. Mute and play/pause toggle unknown states. '
+         'Cannot inspect state, set an exact volume, or verify which player received the key.', 'action',
          {'type': 'string', 'enum': ['volume_up', 'volume_down', 'mute_toggle', 'play_pause', 'next_track']}),
 ]
 
 
 def execute(name, arguments):
+    schema = next((item['parameters'] for item in TOOLS if item['name'] == name), None)
+    if schema is None:
+        raise ValueError('Unknown desktop action.')
+    if not isinstance(arguments, dict) or set(arguments) != set(schema['required']):
+        raise ValueError('Tool arguments must match the declared properties exactly.')
     if name == 'search_web':
         query = arguments.get('query')
         if not isinstance(query, str) or not query.strip() or len(query) > 500:
@@ -72,3 +78,4 @@ def execute(name, arguments):
         ctypes.windll.user32.keybd_event(keys[action], 0, 2, 0)
         return f'Sent {action} media key; response depends on the active player.'
     raise ValueError('Unknown desktop action.')
+

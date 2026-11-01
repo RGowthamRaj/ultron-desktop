@@ -65,6 +65,23 @@ class UITests(unittest.TestCase):
         self.app.send('Open calculator')
         self.assertEqual(self.app.typed.get_nowait(), 'Open calculator')
 
+    def test_quick_button_intent_survives_voice_queue(self):
+        self.app.mode = 'voice'
+        self.app.send('Open calculator', quick_app='calculator')
+        job = self.app.typed.get_nowait()
+        self.assertEqual(job, {'text': 'Open calculator', 'app': 'calculator'})
+        with patch.object(self.app, 'respond') as respond:
+            self.app.handle_command(job, 'text')
+        respond.assert_called_once_with('Open calculator', quick_app='calculator')
+
+    def test_quick_button_uses_local_action_without_provider_key(self):
+        self.app.speech_enabled = False
+        with patch.object(self.app.cloud, 'open_local_app', return_value='Requested opening calculator.') as local:
+            with patch.object(self.app.cloud, 'reply') as remote:
+                self.app.respond('Open calculator', quick_app='calculator')
+        local.assert_called_once()
+        remote.assert_not_called()
+
     def test_mute_cancels_pending_commands(self):
         self.app.want_listen = True
         self.app.typed.put('Open calculator')
@@ -88,3 +105,4 @@ class UITests(unittest.TestCase):
             self.root.after(850, self.root.quit)
             self.root.mainloop()
             start.assert_called_once()
+

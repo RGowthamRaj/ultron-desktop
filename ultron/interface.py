@@ -118,8 +118,9 @@ class Interface:
         self.button(rail, 'Connection', self.open_settings, width=154).pack(fill='x', pady=(0, 10))
         self.button(rail, 'Privacy & voice', self.open_privacy, width=154).pack(fill='x')
         self.label(rail, 'QUICK ACTIONS', size=8, color='#54677f').pack(anchor='w', pady=(36, 14))
-        for text, prompt in [('Calculator', 'Open calculator'), ('Files', 'Open explorer'), ('Browser', 'Open browser')]:
-            self.button(rail, text, lambda p=prompt: self.send(p), width=154, height=36).pack(fill='x', pady=4)
+        for text, app in [('Calculator', 'calculator'), ('Files', 'explorer'), ('Browser', 'browser')]:
+            self.button(rail, text, lambda a=app: self.send(f'Open {a}', quick_app=a),
+                        width=154, height=36).pack(fill='x', pady=4)
         rail_bottom = tk.Frame(rail, bg=rail.cget('bg'))
         rail_bottom.pack(side='bottom', fill='x')
         self.label(rail_bottom, 'YOUR AI', size=8, color='#54677f').pack(anchor='w')
@@ -428,3 +429,4 @@ class Interface:
                                   width=2, fill=CYAN if level>0.07 else '#263e55', tags='meter')
         elapsed = int((time.monotonic()-started)*1000)
         self.root.after(max(15, 80-elapsed), self.animate)
+
