@@ -33,9 +33,18 @@ register itself to start at Windows login.
 The Gemini preset uses `https://generativelanguage.googleapis.com/v1beta/openai` and `gemini-4-argon`.
 The NVIDIA preset uses `https://integrate.api.nvidia.com/v1` and
 `nvidia/nemotron-3.5-lightning-30b-a3b`. The OpenAI preset uses `https://api.openai.com/v1` and
-`gpt-4.1-mini`. All model IDs are editable. Custom APIs must implement OpenAI-compatible
+`gpt-6-luna`. All model IDs are editable. Custom APIs must implement OpenAI-compatible
 `POST /chat/completions`, bearer authentication, and a compatible response schema. The provider
 must permit the selected model. A key for one provider cannot authenticate with another provider.
+
+The OpenAI Luna preset uses no reasoning, low verbosity, strict tool arguments, and a 512-token
+completion cap for short voice interactions. Existing saved model IDs are preserved: choose the
+OpenAI preset again and save to adopt Luna (switching provider clears the unsaved key field).
+Models that require Responses for tools, such as GPT-6.1 Sol, are rejected before a chat tool request;
+this app currently implements Chat Completions only. Gemini Argon uses low thinking with the existing
+2,048-token spend cap; Nemotron keeps thinking disabled. Truncated responses are reported as errors,
+never accepted as completed answers or dispatched as tools. Hard explanations may need another
+model or a larger, explicitly tested budget.
 
 Switching provider clears the unsaved key field. Changing provider/model settings takes effect after
 you save. Some chat models do not support tool calling: disable **Enable desktop tools** to use
@@ -62,6 +71,10 @@ Supported apps: Notepad, Calculator, Explorer, the default browser, VS Code, Chr
 They must already be installed. Search opens results in the browser; it does not read their content.
 Media controls send Windows media keys; mute toggles the current mute state.
 
+The Calculator, Files, and Browser buttons run their explicit, validated local app action without
+contacting an AI provider. They respect Enable desktop tools, cancellation, and the command queue.
+Typed and spoken natural-language requests still use the configured model.
+
 ## Audio and privacy
 
 Wake recognition and command transcription use the installed small English Vosk model. Voice replies
@@ -71,6 +84,9 @@ when using NVIDIA or a custom provider. The voice is synthetic, not an actor's v
 Ambient audio and command clips stay on your device and are not saved. Only recognized text, recent
 conversation turns, and desktop tool results are sent to the selected AI provider. Provider data
 retention and usage charges follow that provider's policies. The conversation is held in memory.
+Conversation history is limited to six turns and 24,000 serialized characters, evicting whole turns.
+Individual requests are limited to 8,000 characters, tool sequences to four model rounds and eight
+tool calls, and provider response bodies to 1 MiB. These are resource bounds, not spending guarantees.
 
 The default wake phrase is **Hey computer** because those words are in the speech model vocabulary.
 A dependable “Ultron” or “Jarvis” trigger requires a suitable custom wake model or pronunciation
@@ -136,13 +152,23 @@ uv pip install --python .\.venv\Scripts\python.exe -r requirements.txt
 .\.venv\Scripts\python.exe -m unittest discover -s tests -v
 ```
 
-33 tests cover transport/provider routing, Gemini payload handling, credential isolation, tool feedback, cancellation, continuous recovery,
+62 tests cover transport/provider routing, Gemini payload handling, credential isolation, tool feedback, cancellation, continuous recovery,
 conversation retention, wake matching, audio format, provider switching, typed command queuing,
 automatic listening startup, settings dialog behavior, and UI layout at default/minimum sizes. Cloud calls and desktop actions
 are mocked. A local smoke test also verified wake recognition and command transcription using
 synthetic Windows audio, and encrypted settings round-trip with a fake key. The interface was
 visually inspected. No real provider key was used; actual provider access and recognition of your
 voice require your configuration and microphone test.
+
+Additional offline checks verify outgoing strict schemas, model compatibility, truncated responses,
+malformed and duplicate tool-call IDs, local argument validation, history bounds, reasoning removal,
+usage accounting, and local quick buttons. See [measures and remaining risks](docs/prompt-review.md).
+
+`Cloud.last_metrics` holds the latest operation's request count, attempted action count, aggregate
+input/output tokens, cached/reasoning token details when supplied, cumulative request time, and total
+cloud-operation time. It stores no transcript or key. `usage_complete: false` means totals are partial
+or unavailable; absent token details are `null`. Timings exclude transcription and speech playback.
+Metrics are in memory and are not sent anywhere or written to a log automatically.
 
 This is a regular Windows Python app; no Pinokio launcher files were created or changed.
 
@@ -152,3 +178,4 @@ This is a regular Windows Python app; no Pinokio launcher files were created or 
 - [NVIDIA Nemotron chat API](https://docs.api.nvidia.com/nim/reference/nvidia-nemotron-3-5-lightning-30b-a3b-infer)
 - [NVIDIA Nemotron model and tool compatibility](https://docs.nvidia.com/nim/large-language-models/2.0.10/get-started/advanced/get-started-nemotron-3.5-lightning.html)
 - [Vosk models and licenses](https://alphacephei.com/vosk/models)
+

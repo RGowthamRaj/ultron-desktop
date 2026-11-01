@@ -185,18 +185,24 @@ class App(Interface):
             text = self.listener.transcribe(command)
         else:
             text = command
+        if isinstance(text, dict):
+            self.respond(text['text'], quick_app=text['app'])
+            return
         if not text:
             self.report('error', 'I did not catch that. Say the wake phrase and try again.')
             return
         self.respond(text)
 
-    def respond(self, text):
+    def respond(self, text, quick_app=None):
         self.report('user', text)
-        if not self.ready():
+        if quick_app is not None and self.cloud:
+            answer = self.cloud.open_local_app(quick_app, self.stop_event.is_set, self.report)
+        elif not self.ready():
             self.report('error', 'Add your provider key in Connection and choose Save connection.')
             return
-        self.report('status', 'Thinking…')
-        answer = self.cloud.reply(text, self.stop_event.is_set, self.report)
+        else:
+            self.report('status', 'Thinking…')
+            answer = self.cloud.reply(text, self.stop_event.is_set, self.report)
         if not answer or self.stop_event.is_set():
             return
         self.report('assistant', answer)
@@ -207,18 +213,18 @@ class App(Interface):
             except Exception as exc:
                 self.report('error', str(exc))
 
-    def send(self, text=None):
+    def send(self, text=None, quick_app=None):
         text = text or self.input.get().strip()
         if not text:
             return
         self.input.delete(0, 'end')
         if self.mode == 'voice' and not self.stop_event.is_set():
             try:
-                self.typed.put_nowait(text)
+                self.typed.put_nowait({'text': text, 'app': quick_app} if quick_app else text)
             except queue.Full:
                 self.write('ISSUE', 'Two commands are already queued. Please wait for a reply.')
         elif not self.mode:
-            self.run_worker(lambda: self.respond(text), 'text')
+            self.run_worker(lambda: self.respond(text, quick_app=quick_app), 'text')
         else:
             self.write('ISSUE', 'Finishing the current operation. Please wait a moment.')
 
@@ -299,3 +305,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+
