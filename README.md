@@ -179,3 +179,11 @@ This is a regular Windows Python app; no Pinokio launcher files were created or 
 - [NVIDIA Nemotron model and tool compatibility](https://docs.nvidia.com/nim/large-language-models/2.0.10/get-started/advanced/get-started-nemotron-3.5-lightning.html)
 - [Vosk models and licenses](https://alphacephei.com/vosk/models)
 
+
+## Optional live model evaluation
+
+The bounded, manually invoked evaluation harness is documented in
+[docs/live-evaluation.md](docs/live-evaluation.md). `python -m evals.live plan`
+is offline. Live runs require explicit flags, verified model rates and a
+separately approved spending cap; OS actions remain mocked. Neither app startup
+nor CI starts a live evaluation.

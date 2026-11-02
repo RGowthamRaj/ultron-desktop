@@ -101,3 +101,13 @@ that meets these conditions; do not infer performance from token prices.
 - [OpenAI prompting](https://developers.openai.com/api/docs/guides/prompt-engineering)
 - [Gemini compatibility settings](https://ai.google.dev/gemini-api/docs/openai)
 - [Nemotron endpoint](https://docs.api.nvidia.com/nim/reference/nvidia-nemotron-3-5-lightning-30b-a3b-infer)
+
+## Executable evaluation harness
+
+The opt-in runner and concrete fixtures are now in `evals/`. See
+[live-evaluation.md](live-evaluation.md) for the offline plan command, separately
+approved budget, exact live invocation, OS-action sandbox, artifacts and blind
+review procedure. It preserves the three-arm/two-repeat experiment and caps each
+whole conversation at four provider requests, including contextual follow-ups.
+No live results are implied by its mocked verification. Speech and recognition
+fields remain explicitly unmeasured until a separate audio experiment.

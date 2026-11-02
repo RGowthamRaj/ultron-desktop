@@ -13,3 +13,4 @@ models/
 *.wav
 *.zip
 output/
+output-config.local.json
