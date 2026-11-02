@@ -4,6 +4,7 @@ import unittest
 from unittest.mock import Mock, patch
 
 from ultron.actions import execute
+from evals.sandbox import action_sandbox
 from ultron.cloud import Cloud, PRESETS
 
 
@@ -161,16 +162,17 @@ class CloudSafetyTests(unittest.TestCase):
         self.assertTrue(metrics['usage_complete'])
         self.assertNotIn('calculator', json.dumps(metrics))
 
-    @patch('ultron.cloud.execute', return_value='Requested opening calculator.')
-    def test_local_button_action_uses_no_provider_requests(self, action):
-        cloud = Cloud('fake-key')
-        cloud.request = Mock()
-        result = cloud.open_local_app('calculator', lambda: False, lambda *args: None)
-        self.assertEqual(result, 'Requested opening calculator.')
-        cloud.request.assert_not_called()
-        action.assert_called_once_with('open_app', {'app': 'calculator'})
-        self.assertEqual(cloud.last_metrics['requests'], 0)
-        self.assertEqual(len(cloud.history), 1)
+    def test_local_button_action_uses_no_provider_requests(self):
+        # Reuse this fail-closed mock boundary in the opt-in live harness.
+        with action_sandbox() as action:
+            cloud = Cloud('fake-key')
+            cloud.request = Mock()
+            result = cloud.open_local_app('calculator', lambda: False, lambda *args: None)
+            self.assertEqual(result, 'Requested opening calculator.')
+            cloud.request.assert_not_called()
+            action.assert_called_once_with('open_app', {'app': 'calculator'})
+            self.assertEqual(cloud.last_metrics['requests'], 0)
+            self.assertEqual(len(cloud.history), 1)
 
     @patch('ultron.cloud.execute')
     def test_local_buttons_respect_tools_disabled_and_stop(self, action):

@@ -1,0 +1,7 @@
+{
+  "configurations": [
+    {"id": "original-current", "prompt": "legacy", "model": "gpt-4.1-mini", "input_usd_per_million": null, "output_usd_per_million": null},
+    {"id": "revised-current", "prompt": "revised", "model": "gpt-4.1-mini", "input_usd_per_million": null, "output_usd_per_million": null},
+    {"id": "revised-luna-none", "prompt": "revised", "model": "gpt-6-luna", "input_usd_per_million": null, "output_usd_per_million": null}
+  ]
+}
